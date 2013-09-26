@@ -1,4 +1,5 @@
-﻿import urllib.request
+﻿import codecs
+import urllib.request
 from html.parser import HTMLParser
 
 class ScheduleHTMLParser(HTMLParser):
@@ -56,9 +57,8 @@ content = resp.decode("UTF-8")
 parser = ScheduleHTMLParser()
 parser.feed(content)
 
-out = open("improved_schedule.ics", "w")
-out.write(
-u"""BEGIN:VCALENDAR
+outString = \
+"""BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
@@ -82,17 +82,21 @@ TZNAME:CET
 DTSTART:19701025T030000
 RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
-END:VTIMEZONE""")
+END:VTIMEZONE"""
 for event in parser.events:
-    out.write("\nBEGIN:VEVENT")
-    out.write("\nDTSTART;TZID=Europe/Warsaw:" + DTSTART(event))
-    out.write("\nDTEND;TZID=Europe/Warsaw:" + DTEND(event))
-    out.write("\nDESCRIPTION:" + DESCRIPTION(event))
-    out.write("\nLOCATION:" + LOCATION(event))
-    out.write("\nSTATUS:CONFIRMED")
-    out.write("\nSUMMARY:" + SUMMARY(event))
-    out.write("\nEND:VEVENT")
-out.write("\nEND:VCALENDAR")
+    outString += "\nBEGIN:VEVENT"
+    outString += "\nDTSTART;TZID=Europe/Warsaw:" + DTSTART(event)
+    outString += "\nDTEND;TZID=Europe/Warsaw:" + DTEND(event)
+    outString += "\nDESCRIPTION:" + DESCRIPTION(event)
+    outString += "\nLOCATION:" + LOCATION(event)
+    outString += "\nSTATUS:CONFIRMED"
+    outString += "\nSUMMARY:" + SUMMARY(event)
+    outString += "\nEND:VEVENT"
+outString += "\nEND:VCALENDAR"
+
+out = codecs.open("improved_schedule.ics", "w", "UTF-8")
+out.write('\ufeff')
+out.write(outString)
 out.close()
 
 print("done")
