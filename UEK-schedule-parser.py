@@ -56,6 +56,7 @@ content = resp.decode("UTF-8")
 
 parser = ScheduleHTMLParser()
 parser.feed(content)
+parser.close()
 
 outString = \
 """BEGIN:VCALENDAR
