@@ -1,103 +1,45 @@
-﻿import codecs
-import urllib.request
-from html.parser import HTMLParser
+﻿#!/usr/bin/python
 
-class ScheduleHTMLParser(HTMLParser):
-    def __init__(self):
-        HTMLParser.__init__(self, True)
-        self.__collecting__ = False
-        self.__event__ = []
-        self.__data__ = ""
-        self.events = []
-    def handle_starttag(self, tag, attrs):
-        if tag == "td" and ("class", "termin") in attrs:
-            self.__collecting__ = True
-            
-    def handle_data(self, data):
-        if data.strip() == "":
-            return
-        if self.__collecting__ == True:
-             self.__data__ = data.strip()
-             
-    def handle_endtag(self, tag):
-        if self.__collecting__ == True and tag == "td":
-            self.__event__.append(self.__data__)
-            self.__data__ = ""
-            if len(self.__event__) == 6:
-                self.events.append(self.__event__)
-                self.__collecting__ = False
-                self.__event__ = []
+import codecs
+from lxml import etree, html
+from datetime import datetime
 
-def DTSTART(parts):
-    d = parts[0].replace("-", "")
-    t = parts[1].split("-")[0].strip()[3:].replace(":", "") + "00"
-    return d + "T" + t + "Z"
+class ScheduleEntry(object):
+    u"Represents the entry for schedule table."
 
-def DTEND(parts):
-    d = parts[0].replace("-", "")
-    t = parts[1].split("-")[1].strip().replace(":", "") + "00"
-    return d + "T" + t + "Z"
+    def __init__(self, dateFrom, dateTo, subject, subjectType, teacher, location):
+        self.dateFrom = dateFrom
+        self.dateTo = dateTo
+        self.subject = subject
+        self.subjectType = subjectType
+        self.teacher = teacher
+        self.location = location
 
-def DESCRIPTION(parts):
-    return parts[4].strip()
+    def toString(self):
+        out = u"Date from: {0}, Date to: {1}, Subject: {2}, Genre: {3}, Teacher: {4}, Location: {5}".format(
+                self.dateFrom, self.dateTo, self.subject, self.subjectType, self.teacher, self.location)
+        print(out)
 
-def LOCATION(parts):
-    return parts[5].strip()
+def parseRowToScheduleEntry(fields):
+    fields = [field.text for field in fields]
+    dateBase = [int(f) for f in fields[0].split("-")]
+    timeFrom = [int(f) for f in fields[1].split(" ")[1].split(":")]
+    timeTo = [int(f) for f in fields[1].split(" ")[3].split(":")]
 
-def SUMMARY(parts):
-    prefix = ""
-    if parts[3].strip() == "wykład":
-        prefix = "[W] "
-    return prefix + parts[2].strip()
+    dateFrom = datetime(dateBase[0], dateBase[1], dateBase[2], timeFrom[0], timeFrom[1])
+    dateTo = datetime(dateBase[0], dateBase[1], dateBase[2], timeTo[0], timeTo[1])
+    subject = fields[2]
+    subjectType = fields[3]
+    teacher = fields[4]
+    location = fields[5]
+
+    return ScheduleEntry(dateFrom, dateTo, subject, subjectType, teacher, location)
 
 url = "http://planzajec.uek.krakow.pl/index.php?typ=G&id=69111&okres=1"
-resp = urllib.request.urlopen(url).read()
-content = resp.decode("UTF-8")
+tree = html.parse(url)
+rows = tree.xpath("//table/tr[count(td) = 6]")
 
-parser = ScheduleHTMLParser()
-parser.feed(content)
-parser.close()
-
-outString = \
-"""BEGIN:VCALENDAR
-VERSION:2.0
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-X-WR-CALNAME:Monika - plan zajęć
-X-WR-TIMEZONE:Europe/Warsaw
-X-WR-CALDESC:
-BEGIN:VTIMEZONE
-TZID:Europe/Warsaw
-X-LIC-LOCATION:Europe/Warsaw
-BEGIN:DAYLIGHT
-TZOFFSETFROM:+0100
-TZOFFSETTO:+0200
-TZNAME:CEST
-DTSTART:19700329T020000
-RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
-END:DAYLIGHT
-BEGIN:STANDARD
-TZOFFSETFROM:+0200
-TZOFFSETTO:+0100
-TZNAME:CET
-DTSTART:19701025T030000
-RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
-END:STANDARD
-END:VTIMEZONE"""
-for event in parser.events:
-    outString += "\nBEGIN:VEVENT"
-    outString += "\nDTSTART;TZID=Europe/Warsaw:" + DTSTART(event)
-    outString += "\nDTEND;TZID=Europe/Warsaw:" + DTEND(event)
-    outString += "\nDESCRIPTION:" + DESCRIPTION(event)
-    outString += "\nLOCATION:" + LOCATION(event)
-    outString += "\nSTATUS:CONFIRMED"
-    outString += "\nSUMMARY:" + SUMMARY(event)
-    outString += "\nEND:VEVENT"
-outString += "\nEND:VCALENDAR"
-
-out = codecs.open("improved_schedule.ics", "w", "UTF-8")
-out.write('\ufeff')
-out.write(outString)
-out.close()
-
-print("done")
+for row in rows:
+    fields = row.xpath("td")
+    se = parseRowToScheduleEntry(fields)
+    print(se.toString())
