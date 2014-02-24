@@ -8,17 +8,28 @@ class ScheduleEntry(object):
     u"Represents the entry for schedule table."
 
     def __init__(self, dateFrom, dateTo, subject, subjectType, teacher, location):
-        self.dateFrom = dateFrom
+        self.datesFromTo = [(dateFrom, dateTo)]
         self.dateTo = dateTo
         self.subject = subject
         self.subjectType = subjectType
         self.teacher = teacher
         self.location = location
 
-    def toString(self):
-        out = u"Date from: {0}, Date to: {1}, Subject: {2}, Genre: {3}, Teacher: {4}, Location: {5}".format(
-                self.dateFrom, self.dateTo, self.subject, self.subjectType, self.teacher, self.location)
-        print(out)
+    def toVEvent(self):
+        datef = "%Y%m%dT%H%M%SZ"
+
+        out = "BEGIN:VEVENT"
+        for dateFromTo in self.datesFromTo:
+            out += "\nDTSTART;TZID=Europe/Warsaw:" + dateFromTo[0].strftime(datef)
+            out += "\nDTEND;TZID=Europe/Warsaw:" + dateFromTo[1].strftime(datef)
+        out += "\nDESCRIPTION:" + self.teacher
+        out += "\nLOCATION:" + self.location
+        out += "\nSTATUS:CONFIRMED"
+        prefix = "[W] " if self.subjectType == "wykład" else ""
+        out += "\nSUMMARY:" + prefix + self.subject
+        out += "\nEND:VEVENT"
+
+        return out
 
 def parseRowToScheduleEntry(fields):
     fields = [field.text for field in fields]
@@ -42,4 +53,4 @@ rows = tree.xpath("//table/tr[count(td) = 6]")
 for row in rows:
     fields = row.xpath("td")
     se = parseRowToScheduleEntry(fields)
-    print(se.toString())
+    print(se.toVEvent())
