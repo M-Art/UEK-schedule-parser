@@ -31,8 +31,23 @@ class ScheduleEntry(object):
 
         return out
 
+    def addDateFromTo(self, dateFromTo):
+        self.datesFromTo.append(dateFromTo)
+
+    def __eq__(self, other):
+        return (self.subject == other.subject
+            and self.subjectType == other.subjectType
+            and self.teacher == other.teacher
+            and self.location == other.location)
+
+    def __hash__(self):
+        return hash((
+            self.subject,
+            self.subjectType,
+            self.teacher,
+            self.location))
+
 def parseRowToScheduleEntry(fields):
-    fields = [field.text for field in fields]
     dateBase = [int(f) for f in fields[0].split("-")]
     timeFrom = [int(f) for f in fields[1].split(" ")[1].split(":")]
     timeTo = [int(f) for f in fields[1].split(" ")[3].split(":")]
@@ -49,8 +64,17 @@ def parseRowToScheduleEntry(fields):
 url = "http://planzajec.uek.krakow.pl/index.php?typ=G&id=69111&okres=1"
 tree = html.parse(url)
 rows = tree.xpath("//table/tr[count(td) = 6]")
+entries = {}
 
 for row in rows:
-    fields = row.xpath("td")
-    se = parseRowToScheduleEntry(fields)
-    print(se.toVEvent())
+    fields = [field.text for field in row.xpath("td")]
+
+    entry = parseRowToScheduleEntry(fields)
+    if entry in entries:
+        entries[entry].addDateFromTo(entry.datesFromTo[0])
+    else:
+        entries.update({entry:entry})
+
+for entry in entries:
+    print(entry.toVEvent())
+
