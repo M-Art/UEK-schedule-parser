@@ -8,12 +8,14 @@ class ScheduleEntry(object):
     u"Represents the entry for schedule table."
 
     def __init__(self, dateFrom, dateTo, subject, subjectType, teacher, location):
+        xstr = lambda x: "" if x is None else x
+
         self.datesFromTo = [(dateFrom, dateTo)]
-        self.dateTo = dateTo
-        self.subject = subject
-        self.subjectType = subjectType
-        self.teacher = teacher
-        self.location = location
+        self.dateTo = xstr(dateTo)
+        self.subject = xstr(subject)
+        self.subjectType = xstr(subjectType)
+        self.teacher = xstr(teacher)
+        self.location = xstr(location)
 
     def toVEvent(self):
         datef = "%Y%m%dT%H%M%SZ"
@@ -25,8 +27,9 @@ class ScheduleEntry(object):
         out += "\nDESCRIPTION:" + self.teacher
         out += "\nLOCATION:" + self.location
         out += "\nSTATUS:CONFIRMED"
-        prefix = "[W] " if self.subjectType == "wykład" else ""
-        out += "\nSUMMARY:" + prefix + self.subject
+        prefix = "[W] " if self.subjectType == u"wykład" else ""
+        summary = self.subject if self.subject else self.subjectType
+        out += "\nSUMMARY:" + prefix + summary
         out += "\nEND:VEVENT"
 
         return out
@@ -41,6 +44,7 @@ class ScheduleEntry(object):
             and self.location == other.location)
 
     def __hash__(self):
+        datesFromTo.
         return hash((
             self.subject,
             self.subjectType,
@@ -61,10 +65,10 @@ def parseRowToScheduleEntry(fields):
 
     return ScheduleEntry(dateFrom, dateTo, subject, subjectType, teacher, location)
 
-url = "http://planzajec.uek.krakow.pl/index.php?typ=G&id=69111&okres=1"
+url = "http://planzajec.uek.krakow.pl/index.php?typ=G&id=26211&okres=2"
 tree = html.parse(url)
 rows = tree.xpath("//table/tr[count(td) = 6]")
-entries = {}
+entries = []
 
 for row in rows:
     fields = [field.text for field in row.xpath("td")]
@@ -75,6 +79,39 @@ for row in rows:
     else:
         entries.update({entry:entry})
 
+outString = \
+u"""BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Monika - plan zajęć
+X-WR-TIMEZONE:Europe/Warsaw
+X-WR-CALDESC:
+BEGIN:VTIMEZONE
+TZID:Europe/Warsaw
+X-LIC-LOCATION:Europe/Warsaw
+BEGIN:DAYLIGHT
+TZOFFSETFROM:+0100
+TZOFFSETTO:+0200
+TZNAME:CEST
+DTSTART:19700329T020000
+RRULE:FREQ=YEARLY;BYMONTH=3;BYDAY=-1SU
+END:DAYLIGHT
+BEGIN:STANDARD
+TZOFFSETFROM:+0200
+TZOFFSETTO:+0100
+TZNAME:CET
+DTSTART:19701025T030000
+RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
+END:STANDARD
+END:VTIMEZONE"""
 for entry in entries:
-    print(entry.toVEvent())
+    outString += u"\n"
+    outString += entry.toVEvent()
+outString += u"\nEND:VCALENDAR"
 
+out = codecs.open("improved_schedule.ics", "w", "UTF-8")
+out.write(outString)
+out.close()
+
+print("done")
