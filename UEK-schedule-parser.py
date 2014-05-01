@@ -1,5 +1,6 @@
 ﻿#!/usr/bin/python
 
+import sys
 import codecs
 from lxml import etree, html
 from datetime import datetime
@@ -34,23 +35,6 @@ class ScheduleEntry(object):
 
         return out
 
-    def addDateFromTo(self, dateFromTo):
-        self.datesFromTo.append(dateFromTo)
-
-    def __eq__(self, other):
-        return (self.subject == other.subject
-            and self.subjectType == other.subjectType
-            and self.teacher == other.teacher
-            and self.location == other.location)
-
-    def __hash__(self):
-        datesFromTo.
-        return hash((
-            self.subject,
-            self.subjectType,
-            self.teacher,
-            self.location))
-
 def parseRowToScheduleEntry(fields):
     dateBase = [int(f) for f in fields[0].split("-")]
     timeFrom = [int(f) for f in fields[1].split(" ")[1].split(":")]
@@ -65,21 +49,24 @@ def parseRowToScheduleEntry(fields):
 
     return ScheduleEntry(dateFrom, dateTo, subject, subjectType, teacher, location)
 
-url = "http://planzajec.uek.krakow.pl/index.php?typ=G&id=26211&okres=2"
-tree = html.parse(url)
-rows = tree.xpath("//table/tr[count(td) = 6]")
-entries = []
+if len(sys.argv) < 2:
+    print("Missing URL argument!")
+    exit()
 
-for row in rows:
-    fields = [field.text for field in row.xpath("td")]
+url = sys.argv[1]
 
-    entry = parseRowToScheduleEntry(fields)
-    if entry in entries:
-        entries[entry].addDateFromTo(entry.datesFromTo[0])
-    else:
-        entries.update({entry:entry})
+try:
+    tree = html.parse(url)
+    rows = tree.xpath("//table/tr[count(td) = 6]")
+    entries = []
 
-outString = \
+    for row in rows:
+        fields = [field.text for field in row.xpath("td")]
+
+        entry = parseRowToScheduleEntry(fields)
+        entries.append(entry)
+
+    outString = \
 u"""BEGIN:VCALENDAR
 VERSION:2.0
 CALSCALE:GREGORIAN
@@ -105,13 +92,15 @@ DTSTART:19701025T030000
 RRULE:FREQ=YEARLY;BYMONTH=10;BYDAY=-1SU
 END:STANDARD
 END:VTIMEZONE"""
-for entry in entries:
-    outString += u"\n"
-    outString += entry.toVEvent()
-outString += u"\nEND:VCALENDAR"
+    for entry in entries:
+        outString += u"\n"
+        outString += entry.toVEvent()
+    outString += u"\nEND:VCALENDAR"
 
-out = codecs.open("improved_schedule.ics", "w", "UTF-8")
-out.write(outString)
-out.close()
+    out = codecs.open("improved_schedule.ics", "w", "UTF-8")
+    out.write(outString)
+    out.close()
 
-print("done")
+    print("Parsed " + str(len(entries)) + " events.")
+except:
+    print("Error!")
