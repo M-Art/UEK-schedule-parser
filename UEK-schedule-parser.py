@@ -3,28 +3,72 @@
 import sys
 import codecs
 from lxml import etree, html
-from datetime import datetime
+import datetime as dt
+
+def secToPTHMS(total_sec):
+    ret = "PT"
+
+    m, s = divmod(total_sec, 60)
+    h, m = divmod(m, 60)
+
+    if h > 0:
+        ret += str(int(h)) + "H"
+
+    if h > 0 or m > 0:
+        ret += str(int(m)) + "M"
+
+    ret += str(int(s)) + "S"
+
+    return ret
 
 class ScheduleEntry(object):
     u"Represents the entry for schedule table."
 
-    def __init__(self, dateFrom, dateTo, subject, subjectType, teacher, location):
+    def __init__(self, dateTimeFrom, dateTimeTo, subject, subjectType, teacher, location):
         xstr = lambda x: "" if x is None else x
 
-        self.datesFromTo = [(dateFrom, dateTo)]
-        self.dateTo = xstr(dateTo)
+        self.dates = [(dateTimeFrom, dateTimeTo)]
+        self.weekday = dateTimeFrom.weekday()
+        self.startTime = dateTimeFrom.time()
+        self.duration = dateTimeTo - dateTimeFrom
         self.subject = xstr(subject)
         self.subjectType = xstr(subjectType)
         self.teacher = xstr(teacher)
         self.location = xstr(location)
 
+    def addDate(self, date):
+        self.dates.append(date)
+
+    def __eq__(self, other):
+        return (self.weekday == other.weekday
+            and self.startTime == other.startTime
+            and self.duration == other.duration
+            and self.subject == other.subject
+            and self.subjectType == other.subjectType
+            and self.teacher == other.teacher
+            and self.location == other.location)
+
+    def __hash__(self):
+        return hash((
+            self.weekday,
+            self.startTime,
+            self.duration,
+            self.subject,
+            self.subjectType,
+            self.teacher,
+            self.location))
+
     def toVEvent(self):
-        datef = "%Y%m%dT%H%M%SZ"
+        datef = "%Y%m%dT%H%M%S"
 
         out = "BEGIN:VEVENT"
-        for dateFromTo in self.datesFromTo:
-            out += "\nDTSTART;TZID=Europe/Warsaw:" + dateFromTo[0].strftime(datef)
-            out += "\nDTEND;TZID=Europe/Warsaw:" + dateFromTo[1].strftime(datef)
+        out += "\nDTSTART;TZID=Europe/Warsaw:" + self.dates[0][0].strftime(datef)
+        out += "\nDTEND;TZID=Europe/Warsaw:" + self.dates[0][1].strftime(datef)
+
+        if len(self.dates) > 1:
+            out += "\nRDATE;TZID=Europe/Warsaw:"
+            out += ",".join([dateFrom.strftime(datef) for (dateFrom, _) in self.dates[1:]])
+
         out += "\nDESCRIPTION:" + self.teacher
         out += "\nLOCATION:" + self.location
         out += "\nSTATUS:CONFIRMED"
@@ -36,35 +80,36 @@ class ScheduleEntry(object):
         return out
 
 def parseRowToScheduleEntry(fields):
-    dateBase = [int(f) for f in fields[0].split("-")]
-    timeFrom = [int(f) for f in fields[1].split(" ")[1].split(":")]
-    timeTo = [int(f) for f in fields[1].split(" ")[3].split(":")]
+    date = dt.date(*[int(f) for f in fields[0].split("-")])
+    timeFrom = dt.time(*[int(f) for f in fields[1].split(" ")[1].split(":")])
+    timeTo = dt.time(*[int(f) for f in fields[1].split(" ")[3].split(":")])
 
-    dateFrom = datetime(dateBase[0], dateBase[1], dateBase[2], timeFrom[0], timeFrom[1])
-    dateTo = datetime(dateBase[0], dateBase[1], dateBase[2], timeTo[0], timeTo[1])
+    dateTimeFrom = dt.datetime.combine(date, timeFrom)
+    dateTimeTo = dt.datetime.combine(date, timeTo)
     subject = fields[2]
     subjectType = fields[3]
     teacher = fields[4]
     location = fields[5]
 
-    return ScheduleEntry(dateFrom, dateTo, subject, subjectType, teacher, location)
+    return ScheduleEntry(dateTimeFrom, dateTimeTo, subject, subjectType, teacher, location)
 
-if len(sys.argv) < 2:
-    print("Missing URL argument!")
-    exit()
 
-url = sys.argv[1]
+url = raw_input("Enter URL with your schedule: ")
 
 try:
     tree = html.parse(url)
     rows = tree.xpath("//table/tr[count(td) = 6]")
-    entries = []
+    entries = {} 
 
     for row in rows:
         fields = [field.text for field in row.xpath("td")]
 
         entry = parseRowToScheduleEntry(fields)
-        entries.append(entry)
+
+        if entry in entries:
+            entries[entry].addDate(entry.dates[0])
+        else:
+            entries.update({entry:entry})
 
     outString = \
 u"""BEGIN:VCALENDAR
@@ -97,10 +142,14 @@ END:VTIMEZONE"""
         outString += entry.toVEvent()
     outString += u"\nEND:VCALENDAR"
 
-    out = codecs.open("improved_schedule.ics", "w", "UTF-8")
+    print("Found " + str(len(entries)) + " different events")
+
+    outFileName = "schedule.ics"
+
+    out = codecs.open(outFileName, "w", "UTF-8")
     out.write(outString)
     out.close()
 
-    print("Parsed " + str(len(entries)) + " events.")
-except:
+    print('Your schedule has been written to "' + outFileName + '" file')
+except Exception as E:
     print("Error!")
